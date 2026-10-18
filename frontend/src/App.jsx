@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Info,
   RefreshCw,
+  UserRound,
 } from "lucide-react";
 
 const modes = ["vulnerable", "safe"];
@@ -281,6 +282,131 @@ function DomDemo({ mode }) {
     </>
   );
 }
+function ProfileDemo({ mode }) {
+  const [profile, setProfile] = useState(null);
+  const [csrfToken, setCsrfToken] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function startSession() {
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const data = await fetchJSON("/api/lab/session", {
+        method: "POST",
+        credentials: "include",
+      });
+      setProfile(data.profile);
+      setRecoveryEmail(data.profile.recovery_email);
+      setCsrfToken(data.csrfToken);
+      setSuccess("Demo TA session created.");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadProfile() {
+    setError("");
+    setSuccess("");
+    try {
+      const data = await fetchJSON("/api/lab/profile", {
+        credentials: "include",
+      });
+      setProfile(data);
+      setRecoveryEmail(data.recovery_email);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function updateEmail(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const headers = { "Content-Type": "application/json" };
+      if (mode === "safe") {
+        headers["x-csrf-token"] = csrfToken;
+      }
+      const result = await fetchJSON(`/api/lab/${mode}/recovery-email`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: JSON.stringify({ recoveryEmail }),
+      });
+      setProfile(result.profile);
+      setRecoveryEmail(result.profile.recovery_email);
+      setSuccess("Recovery email updated successfully.");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <Heading
+        tag="04 / CSRF"
+        title="TA Profile & Recovery Email"
+        subtitle="Compare recovery-email changes in vulnerable and safe modes using a fictional TA account."
+      />
+      <div className="two-col">
+        <section className="panel stack">
+          <h3>Demo TA session</h3>
+          <p className="muted">Create a local demo session before updating the profile.</p>
+          <button type="button" onClick={startSession} disabled={busy}>
+            {busy ? "Please wait..." : "Start Demo Session"}
+          </button>
+          <button type="button" className="subtle" onClick={loadProfile}>
+            <RefreshCw size={15} /> Refresh profile
+          </button>
+          {profile ? (
+            <div className="stack">
+              <div><b>Name:</b> {profile.name}</div>
+              <div><b>Email:</b> {profile.email}</div>
+              <div><b>Current recovery email:</b> {profile.recovery_email}</div>
+            </div>
+          ) : (
+            <p className="muted">No demo profile loaded.</p>
+          )}
+        </section>
+        <form className="panel stack" onSubmit={updateEmail}>
+          <h3>Change recovery email</h3>
+          <label>
+            New recovery email
+            <input
+              type="email"
+              value={recoveryEmail}
+              onChange={e => setRecoveryEmail(e.target.value)}
+              placeholder="recovery@example.com"
+              required
+              maxLength={150}
+            />
+          </label>
+          <p className="muted">
+            {mode === "safe"
+              ? "Safe mode: this request sends your session's CSRF token."
+              : "Vulnerable mode: this request does not send a CSRF token."}
+          </p>
+          <button type="submit" disabled={busy || !profile || (mode === "safe" && !csrfToken)}>
+            {busy ? "Saving..." : "Update recovery email"}
+          </button>
+          {success && <p className="success">{success}</p>}
+          {error && <p className="error">{error}</p>}
+        </form>
+      </div>
+      <DemoNote text="This profile form verifies normal updates, not CSRF exploitation. To fulfill the assignment, test a forged request from a separate local page and confirm the vulnerable update succeeds while the safe update is blocked." />
+    </>
+  );
+}
+
 function DemoNote({ text }) {
   return (
     <div className="demo-note">
@@ -311,7 +437,7 @@ function Overview({ courses, assessments, onNavigate }) {
         <div className="stat">
           <ShieldCheck />
           <span>Security cases</span>
-          <strong>3</strong>
+          <strong>4</strong>
         </div>
       </div>
       <section className="panel">
@@ -342,6 +468,7 @@ function Overview({ courses, assessments, onNavigate }) {
           <button onClick={() => onNavigate("announcements")}>
             Announcements
           </button>
+          <button onClick={() => onNavigate("profile")}>TA Profile / CSRF</button>
         </div>
       </section>
     </>
@@ -352,6 +479,7 @@ const items = [
   ["search", "Course Search", Search],
   ["discussions", "Discussions", MessageSquare],
   ["announcements", "Announcements", Megaphone],
+  ["profile", "TA Profile / CSRF", UserRound],
 ];
 export default function App() {
   const [mode, setMode] = useState("vulnerable");
@@ -448,6 +576,7 @@ export default function App() {
             <Discussions mode={mode} courses={courses} />
           )}
           {page === "announcements" && <DomDemo mode={mode} />}
+          {page === "profile" && <ProfileDemo mode={mode} />}
         </main>
       </div>
     </div>
