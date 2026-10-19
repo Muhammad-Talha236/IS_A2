@@ -4,29 +4,42 @@ import express from 'express';
 import cors from 'cors';
 import crypto from 'node:crypto';
 import { pool } from './db.js';
+import { sqlRoutes } from './sqlRoutes.js';
 
 const app = express();
+
+// ==========================================
+// CORS CONFIGURATION
+// ==========================================
 
 const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:4100'
 ]);
+
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.has(origin)) {
       return callback(null, true);
     }
+
     return callback(new Error('Origin not allowed'));
   },
   credentials: true
 }));
 
 app.use(express.json({ limit: '12kb' }));
-app.use(express.urlencoded({ extended: false, limit: '12kb' }));
+app.use(express.urlencoded({
+  extended: false,
+  limit: '12kb'
+}));
 
-// LOCAL SECURITY LAB ONLY. Do not expose this application publicly.
-const isMode = mode => ['vulnerable', 'safe'].includes(mode);
+// LOCAL SECURITY LAB ONLY.
+// Never deploy vulnerable routes publicly or use real student records.
+
+const isMode = mode =>
+  ['vulnerable', 'safe'].includes(mode);
 
 function escapeHTML(value) {
   return String(value).replace(/[&<>"']/g, char => ({
@@ -48,6 +61,7 @@ function parseCookies(header = '') {
   return Object.fromEntries(
     header.split(';').filter(Boolean).map(part => {
       const index = part.indexOf('=');
+
       return [
         part.slice(0, index).trim(),
         part.slice(index + 1).trim()
@@ -57,7 +71,9 @@ function parseCookies(header = '') {
 }
 
 function requireDemoSession(req, res, next) {
-  const sessionId = parseCookies(req.headers.cookie).ua_session;
+  const sessionId =
+    parseCookies(req.headers.cookie).ua_session;
+
   const session = demoSessions.get(sessionId);
 
   if (!session) {
@@ -82,7 +98,11 @@ function validRecoveryEmail(email) {
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', database: 'connected' });
+
+    res.json({
+      status: 'ok',
+      database: 'connected'
+    });
   } catch {
     res.status(503).json({
       status: 'error',
@@ -92,7 +112,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 // ==========================================
-// COURSES AND ASSESSMENTS
+// COURSES
 // ==========================================
 
 app.get('/api/courses', async (_req, res, next) => {
@@ -100,21 +120,30 @@ app.get('/api/courses', async (_req, res, next) => {
     const { rows } = await pool.query(
       'SELECT * FROM courses ORDER BY code'
     );
+
     res.json(rows);
   } catch (error) {
     next(error);
   }
 });
 
+// ==========================================
+// ASSESSMENTS
+// ==========================================
+
 app.get('/api/assessments', async (_req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT a.id, a.title, a.max_marks,
-              c.code AS course_code
+      `SELECT
+         a.id,
+         a.title,
+         a.max_marks,
+         c.code AS course_code
        FROM assessments a
        JOIN courses c ON c.id = a.course_id
        ORDER BY a.id`
     );
+
     res.json(rows);
   } catch (error) {
     next(error);
@@ -129,14 +158,17 @@ app.get('/api/:mode/search', async (req, res, next) => {
   const { mode } = req.params;
 
   if (!isMode(mode)) {
-    return res.status(404).json({ error: 'Unknown mode' });
+    return res.status(404).json({
+      error: 'Unknown mode'
+    });
   }
 
   const q = String(req.query.q ?? '').slice(0, 500);
 
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM courses
+      `SELECT *
+       FROM courses
        WHERE code ILIKE $1 OR title ILIKE $1
        ORDER BY code`,
       [`%${q}%`]
@@ -157,14 +189,18 @@ app.get('/api/:mode/search', async (req, res, next) => {
 });
 
 // ==========================================
-// STORED XSS
+// STORED XSS — FETCH DISCUSSIONS
 // ==========================================
 
 app.get('/api/discussions', async (_req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT d.id, d.author, d.body,
-              d.created_at, c.code AS course_code
+      `SELECT
+         d.id,
+         d.author,
+         d.body,
+         d.created_at,
+         c.code AS course_code
        FROM discussions d
        JOIN courses c ON c.id = d.course_id
        ORDER BY d.id DESC
@@ -176,6 +212,10 @@ app.get('/api/discussions', async (_req, res, next) => {
     next(error);
   }
 });
+
+// ==========================================
+// STORED XSS — CREATE DISCUSSION
+// ==========================================
 
 app.post('/api/discussions', async (req, res, next) => {
   const author = String(req.body?.author ?? '').trim();
@@ -205,14 +245,17 @@ app.post('/api/discussions', async (req, res, next) => {
     res.status(201).json(rows[0]);
   } catch (error) {
     if (error.code === '23503') {
-      return res.status(400).json({ error: 'Invalid course' });
+      return res.status(400).json({
+        error: 'Invalid course'
+      });
     }
+
     next(error);
   }
 });
 
 // ==========================================
-// CSRF — DEMO LOGIN / SESSION
+// CSRF — DEMO SESSION
 // ==========================================
 
 app.post('/api/lab/session', async (_req, res, next) => {
@@ -230,8 +273,11 @@ app.post('/api/lab/session', async (_req, res, next) => {
       });
     }
 
-    const sessionId = crypto.randomBytes(24).toString('hex');
-    const csrfToken = crypto.randomBytes(32).toString('hex');
+    const sessionId =
+      crypto.randomBytes(24).toString('hex');
+
+    const csrfToken =
+      crypto.randomBytes(32).toString('hex');
 
     demoSessions.set(sessionId, {
       profileId: rows[0].id,
@@ -256,29 +302,37 @@ app.post('/api/lab/session', async (_req, res, next) => {
 });
 
 // ==========================================
-// CSRF — FETCH TA PROFILE
+// CSRF — FETCH PROFILE
 // ==========================================
 
-app.get('/api/lab/profile', requireDemoSession, async (req, res, next) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, name, email, recovery_email
-       FROM lab_profiles
-       WHERE id = $1`,
-      [req.demoSession.profileId]
-    );
+app.get(
+  '/api/lab/profile',
+  requireDemoSession,
+  async (req, res, next) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT
+           id,
+           name,
+           email,
+           recovery_email
+         FROM lab_profiles
+         WHERE id = $1`,
+        [req.demoSession.profileId]
+      );
 
-    if (!rows.length) {
-      return res.status(404).json({
-        error: 'Profile not found'
-      });
+      if (!rows.length) {
+        return res.status(404).json({
+          error: 'Profile not found'
+        });
+      }
+
+      res.json(rows[0]);
+    } catch (error) {
+      next(error);
     }
-
-    res.json(rows[0]);
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 // ==========================================
 // CSRF — RECOVERY EMAIL UPDATE
@@ -298,12 +352,14 @@ app.post(
       }
 
       if (mode === 'safe') {
-        const submittedToken = req.get('x-csrf-token');
+        const submittedToken =
+          req.get('x-csrf-token');
 
         if (
           typeof submittedToken !== 'string' ||
           !submittedToken ||
-          submittedToken !== req.demoSession.csrfToken
+          submittedToken !==
+            req.demoSession.csrfToken
         ) {
           return res.status(403).json({
             error: 'Invalid or missing CSRF token'
@@ -325,8 +381,15 @@ app.post(
         `UPDATE lab_profiles
          SET recovery_email = $1
          WHERE id = $2
-         RETURNING id, name, email, recovery_email`,
-        [recoveryEmail, req.demoSession.profileId]
+         RETURNING
+           id,
+           name,
+           email,
+           recovery_email`,
+        [
+          recoveryEmail,
+          req.demoSession.profileId
+        ]
       );
 
       res.json({
@@ -340,18 +403,36 @@ app.post(
 );
 
 // ==========================================
-// ERROR HANDLER
+// SQL INJECTION — ALL THREE LEVELS
+// ==========================================
+
+// Registered endpoints:
+//
+// POST /api/sql/vulnerable/login
+// POST /api/sql/safe/login
+//
+// GET /api/sql/vulnerable/grade-availability
+// GET /api/sql/safe/grade-availability
+//
+// GET /api/sql/vulnerable/student-records
+// GET /api/sql/safe/student-records
+
+app.use('/api/sql', sqlRoutes);
+
+// ==========================================
+// GLOBAL ERROR HANDLER
 // ==========================================
 
 app.use((err, _req, res, _next) => {
   console.error(err.message);
+
   res.status(500).json({
     error: 'Server error'
   });
 });
 
 // ==========================================
-// SERVER
+// START SERVER
 // ==========================================
 
 const port = Number(process.env.PORT || 5000);

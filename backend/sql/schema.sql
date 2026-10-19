@@ -1,3 +1,15 @@
+-- Fictional CSRF demo profile; preserve any existing profile and recovery email.
+CREATE TABLE IF NOT EXISTS lab_profiles (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(150) UNIQUE NOT NULL,
+  recovery_email VARCHAR(150) NOT NULL
+);
+
+INSERT INTO lab_profiles (name, email, recovery_email)
+VALUES ('Demo TA', 'demo.ta@cfd.nu.edu.pk', 'demo.recovery@uniassess.test')
+ON CONFLICT (email) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS courses (
   id SERIAL PRIMARY KEY,
   code VARCHAR(24) NOT NULL UNIQUE,
