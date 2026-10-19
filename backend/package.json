@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {"dev": "node --watch src/server.js", "start": "node src/server.js", "db:setup": "node src/setup.js", "test:sql": "node src/verify-sql.js"},
+  "scripts": {"dev": "node --watch src/server.js", "start": "node src/server.js", "db:setup": "node src/setup.js", "test:sql": "node tests/integration.js"},
   "dependencies": {"cors": "^2.8.5", "dotenv": "^16.4.5", "express": "^4.21.2", "pg": "^8.13.1"}
 }
